@@ -1,0 +1,11 @@
+flask
+requests
+beautifulsoup4
+lxml
+pandas
+openpyxl
+python-dotenv
+anthropic
+tldextract
+urllib3
+python-dateutil
