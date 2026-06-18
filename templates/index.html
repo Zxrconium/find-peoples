@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>People Finder</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --border: #dde1e7;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-fg: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --danger: #dc2626;
+      --green: #16a34a;
+      --blue: #2563eb;
+      --yellow: #ca8a04;
+      --gray: #94a3b8;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.5px;
+    }
+    .header p {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 1rem;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Form ── */
+    .form-group {
+      margin-bottom: 1.1rem;
+    }
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--text);
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.6rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 1rem;
+      color: var(--text);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      margin-bottom: 1.2rem;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .checkbox-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.65rem 1.4rem;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: var(--primary-fg);
+      width: 100%;
+      justify-content: center;
+      font-size: 1rem;
+      padding: 0.75rem;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-secondary {
+      background: #e2e8f0;
+      color: var(--text);
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+    }
+    .btn-secondary:hover { background: #cbd5e1; }
+
+    /* ── Status / spinner ── */
+    #status-section { display: none; }
+    .spinner-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+    }
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #status-text { color: var(--muted); font-size: 0.95rem; }
+
+    /* ── Results ── */
+    #results-section { display: none; }
+    .results-summary {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 1.2rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 1.25rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th {
+      background: var(--bg);
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+    }
+    td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      vertical-align: middle;
+      margin-left: 0.3rem;
+    }
+    .badge-green { background: #dcfce7; color: var(--green); }
+    .badge-blue  { background: #dbeafe; color: var(--blue); }
+    .badge-yellow{ background: #fef9c3; color: var(--yellow); }
+
+    .email-guess { font-style: italic; color: var(--muted); }
+    .email-none  { color: var(--gray); font-style: italic; }
+
+    .link-linkedin {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 0.85rem;
+    }
+    .link-linkedin:hover { text-decoration: underline; }
+
+    .export-buttons {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    /* ── Failure ── */
+    #failure-section { display: none; }
+    .failure-message {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--danger);
+      margin-bottom: 0.75rem;
+    }
+    .failure-suggestion {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    .pages-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .pages-list li {
+      font-size: 0.82rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .pages-list li::before { content: "• "; color: var(--border); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .header h1 { font-size: 1.5rem; }
+      .export-buttons { flex-direction: column; }
+      .btn-secondary { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>People Finder</h1>
+      <p>Find publicly listed People &amp; HR leaders from company websites</p>
+    </div>
+
+    <!-- Input -->
+    <div class="card">
+      <div class="form-group">
+        <label for="url-input">Company Website URL</label>
+        <input
+          type="text"
+          id="url-input"
+          placeholder="e.g. example.com or https://example.com/about/team"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <div class="checkbox-group">
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-hunter" />
+          Use Hunter.io email verification (requires API key)
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-guess" />
+          Allow guessed email patterns
+        </label>
+      </div>
+
+      <button class="btn btn-primary" id="find-btn" onclick="startFind()">
+        Find People
+      </button>
+    </div>
+
+    <!-- Status -->
+    <div class="card" id="status-section">
+      <div class="spinner-wrap">
+        <div class="spinner"></div>
+        <span id="status-text">Starting…</span>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="card" id="results-section">
+      <div class="results-summary" id="results-summary"></div>
+
+      <div class="table-wrap">
+        <table id="results-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Role Title</th>
+              <th>Email</th>
+              <th>LinkedIn Profile</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="export-buttons">
+        <button class="btn btn-secondary" id="btn-excel" onclick="downloadExcel()">
+          Download as Excel
+        </button>
+        <button class="btn btn-secondary" id="btn-audit" onclick="downloadAudit()">
+          Download Audit Log
+        </button>
+      </div>
+    </div>
+
+    <!-- Failure -->
+    <div class="card" id="failure-section">
+      <div class="failure-message">No People/HR leaders found</div>
+      <div class="failure-suggestion">
+        The crawler checked the pages below but could not identify any People or HR leaders.
+        Try submitting a direct team/leadership page URL, or check if the site requires login.
+      </div>
+      <strong style="font-size:0.85rem; color:var(--muted);">Pages checked:</strong>
+      <ul class="pages-list" id="failure-pages" style="margin-top:0.4rem;"></ul>
+    </div>
+
+  </div><!-- /container -->
+
+  <script>
+    let lastResult = null;
+
+    function setStatus(text) {
+      document.getElementById('status-text').textContent = text;
+    }
+
+    function showSection(id) {
+      ['status-section','results-section','failure-section'].forEach(s => {
+        document.getElementById(s).style.display = s === id ? 'block' : 'none';
+      });
+    }
+
+    function hideAllSections() {
+      ['status-section','results-section','failure-section'].forEach(s => {
+        document.getElementById(s).style.display = 'none';
+      });
+    }
+
+    function renderEmail(person) {
+      const status = person.email_status;
+      const email = person.email;
+
+      if (!email || status === 'not_found') {
+        return '<span class="email-none">Not found</span>';
+      }
+
+      if (status === 'verified') {
+        return `${escHtml(email)}<span class="badge badge-green">verified</span>`;
+      }
+      if (status === 'found_on_site') {
+        return `${escHtml(email)}<span class="badge badge-blue">found on site</span>`;
+      }
+      if (status === 'hunter_confident') {
+        return `${escHtml(email)}<span class="badge badge-yellow">Hunter.io</span>`;
+      }
+      if (status === 'pattern_guess') {
+        return `<span class="email-guess">${escHtml(email)}</span>`;
+      }
+      return escHtml(email);
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderTable(people) {
+      const tbody = document.getElementById('results-tbody');
+      tbody.innerHTML = '';
+      people.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escHtml(p.name)}</td>
+          <td>${escHtml(p.company)}</td>
+          <td>${escHtml(p.role_title)}</td>
+          <td>${renderEmail(p)}</td>
+          <td>
+            ${p.linkedin_url
+              ? `<a class="link-linkedin" href="${escHtml(p.linkedin_url)}" target="_blank" rel="noopener noreferrer">Search LinkedIn</a>`
+              : '—'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function startFind() {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url) {
+        alert('Please enter a company website URL.');
+        return;
+      }
+
+      const useHunter = document.getElementById('chk-hunter').checked;
+      const allowGuess = document.getElementById('chk-guess').checked;
+
+      document.getElementById('find-btn').disabled = true;
+      hideAllSections();
+      showSection('status-section');
+      setStatus('Validating URL…');
+
+      // Animate status through stages
+      const stages = [
+        [800,  'Fetching robots.txt…'],
+        [2000, 'Discovering pages…'],
+        [4000, 'Crawling team pages…'],
+        [7000, 'Extracting people…'],
+        [10000,'Running AI analysis…'],
+        [14000,'Enriching emails…'],
+      ];
+      const timers = stages.map(([delay, msg]) =>
+        setTimeout(() => setStatus(msg), delay)
+      );
+
+      try {
+        const resp = await fetch('/find', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, use_hunter: useHunter, allow_guess: allowGuess }),
+        });
+
+        timers.forEach(clearTimeout);
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+          showFailure([], err.error || 'Server error.');
+          return;
+        }
+
+        const data = await resp.json();
+        lastResult = data;
+
+        if (data.success && data.people && data.people.length > 0) {
+          document.getElementById('results-summary').textContent =
+            `Found ${data.people.length} person${data.people.length !== 1 ? 's' : ''} at ${data.company}`;
+          renderTable(data.people);
+          showSection('results-section');
+        } else {
+          showFailure(data.pages_checked || [], data.error || 'No People/HR leaders found.');
+        }
+      } catch (err) {
+        timers.forEach(clearTimeout);
+        showFailure([], 'Network error: ' + err.message);
+      } finally {
+        document.getElementById('find-btn').disabled = false;
+      }
+    }
+
+    function showFailure(pages, message) {
+      showSection('failure-section');
+      const msgEl = document.getElementById('failure-section').querySelector('.failure-message');
+      msgEl.textContent = message || 'No People/HR leaders found';
+      const ul = document.getElementById('failure-pages');
+      ul.innerHTML = '';
+      (pages || []).forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p;
+        ul.appendChild(li);
+      });
+    }
+
+    async function downloadExcel() {
+      if (!lastResult) return;
+      try {
+        const resp = await fetch('/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(lastResult),
+        });
+        if (!resp.ok) {
+          alert('Export failed.');
+          return;
+        }
+        const blob = await resp.blob();
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="?([^";]+)"?/);
+        const filename = match ? match[1] : 'people-finder-export.xlsx';
+        triggerDownload(blob, filename);
+      } catch (err) {
+        alert('Download failed: ' + err.message);
+      }
+    }
+
+    async function downloadAudit() {
+      try {
+        const resp = await fetch('/export/audit');
+        if (!resp.ok) {
+          // Fall back to downloading from lastResult via POST
+          if (lastResult) {
+            await downloadExcel();
+          } else {
+            alert('No audit data available.');
+          }
+          return;
+        }
+        const blob = await resp.blob();
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="?([^";]+)"?/);
+        const filename = match ? match[1] : 'people-finder-audit.xlsx';
+        triggerDownload(blob, filename);
+      } catch (err) {
+        alert('Download failed: ' + err.message);
+      }
+    }
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Allow pressing Enter in input
+    document.getElementById('url-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') startFind();
+    });
+  </script>
+</body>
+</html>
