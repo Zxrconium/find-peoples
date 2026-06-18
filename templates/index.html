@@ -312,6 +312,11 @@
     <!-- Results -->
     <div class="card" id="results-section">
       <div class="results-summary" id="results-summary"></div>
+      <div id="exec-fallback-notice" style="display:none; margin-bottom:1rem; padding:0.75rem 1rem;
+           background:#fff8e1; border-left:4px solid #f59e0b; border-radius:4px;
+           font-size:0.9rem; color:#92400e;">
+        ⚠️ No People/HR leader was found. Showing executive fallback contacts instead.
+      </div>
 
       <div class="table-wrap">
         <table id="results-table">
@@ -471,6 +476,8 @@
         if (data.success && data.people && data.people.length > 0) {
           document.getElementById('results-summary').textContent =
             `Found ${data.people.length} person${data.people.length !== 1 ? 's' : ''} at ${data.company}`;
+          document.getElementById('exec-fallback-notice').style.display =
+            data.exec_fallback ? 'block' : 'none';
           renderTable(data.people);
           showSection('results-section');
         } else {

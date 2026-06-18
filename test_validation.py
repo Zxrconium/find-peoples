@@ -12,6 +12,7 @@ from app import (
     is_valid_person_name,
     is_valid_people_role_title,
     is_hr_role,
+    is_exec_fallback_role,
     source_quote_supports_person_and_role,
 )
 
@@ -251,6 +252,150 @@ def test_quote_passes_when_short():
     assert source_quote_supports_person_and_role(
         "Explore our team", "Jane Smith", "HR Director"
     )
+
+
+# ── Primary People/HR role acceptance (all must pass is_hr_role) ─────────────
+
+def test_hr_accepts_director_people_culture():
+    assert is_hr_role("Director – People & Culture")
+
+def test_hr_accepts_people_engagement_lead():
+    assert is_hr_role("People Engagement Lead")
+
+def test_hr_accepts_director_legal_people_culture():
+    assert is_hr_role("Director of Legal, People & Culture")
+
+def test_hr_accepts_egm_people_culture_customer():
+    assert is_hr_role("Executive General Manager People, Culture & Customer")
+
+def test_hr_accepts_chief_people_and_culture_officer():
+    assert is_hr_role("Chief People and Culture Officer")
+
+def test_hr_accepts_head_of_people_and_culture():
+    assert is_hr_role("Head of People and Culture")
+
+def test_hr_accepts_head_of_hr_apac():
+    assert is_hr_role("Head of HR APAC")
+
+def test_hr_accepts_group_executive_people_safety_culture():
+    assert is_hr_role("Group Executive People, Safety and Culture")
+
+def test_hr_accepts_head_of_people_safety_compliance():
+    assert is_hr_role("Head of People, Safety and Compliance")
+
+def test_hr_accepts_group_executive_people_culture_sustainability():
+    assert is_hr_role("Group Executive, People, Culture and Sustainability")
+
+def test_hr_accepts_talent_acquisition_lead():
+    assert is_hr_role("Talent Acquisition Lead")
+
+def test_hr_accepts_people_culture_coordinator():
+    assert is_hr_role("People and Culture Coordinator")
+
+def test_hr_accepts_people_services_specialist():
+    assert is_hr_role("People Services Specialist")
+
+def test_hr_accepts_people_culture_manager():
+    assert is_hr_role("People and Culture Manager")
+
+def test_hr_accepts_people_culture_partner():
+    assert is_hr_role("People and Culture Partner")
+
+def test_hr_accepts_people_culture_business_partner():
+    assert is_hr_role("People and Culture Business Partner")
+
+def test_hr_accepts_general_manager_people_culture():
+    assert is_hr_role("General Manager, People & Company Culture")
+
+def test_hr_accepts_general_manager_people_culture_dash():
+    assert is_hr_role("General Manager - People and Culture")
+
+def test_hr_accepts_group_manager_people_culture():
+    assert is_hr_role("Group Manager People and Culture")
+
+def test_hr_accepts_chief_people_marketing_officer():
+    assert is_hr_role("Chief People and Marketing Officer")
+
+# Roles that must NOT pass is_hr_role (rejected / fallback only)
+def test_hr_rejects_ceo():
+    assert not is_hr_role("CEO")
+
+def test_hr_rejects_managing_director():
+    assert not is_hr_role("Managing Director")
+
+def test_hr_rejects_founder():
+    assert not is_hr_role("Founder")
+
+def test_hr_rejects_vp_program_quality():
+    assert not is_hr_role("VP Program Quality and Strategy")
+
+def test_hr_rejects_national_sales_manager():
+    assert not is_hr_role("National Sales Manager")
+
+def test_hr_rejects_gm_industry_partnership():
+    assert not is_hr_role("General Manager Industry & Partnership Development")
+
+def test_hr_rejects_vp_risk_corporate():
+    assert not is_hr_role("VP Risk & Corporate Services")
+
+def test_hr_rejects_communications_engagement_lead():
+    assert not is_hr_role("Communications and Engagement Lead")
+
+def test_hr_rejects_community_relationships_manager():
+    assert not is_hr_role("Community Relationships Manager")
+
+def test_hr_rejects_director_global_functions_comms():
+    assert not is_hr_role("Director, Global Functions Communications")
+
+
+# ── is_exec_fallback_role ─────────────────────────────────────────────────────
+
+def test_exec_accepts_ceo():
+    assert is_exec_fallback_role("CEO")
+
+def test_exec_accepts_chief_executive_officer():
+    assert is_exec_fallback_role("Chief Executive Officer")
+
+def test_exec_accepts_managing_director():
+    assert is_exec_fallback_role("Managing Director")
+
+def test_exec_accepts_founder():
+    assert is_exec_fallback_role("Founder")
+
+def test_exec_accepts_founder_ceo_slash():
+    assert is_exec_fallback_role("Founder/CEO")
+
+def test_exec_accepts_founder_and_ceo():
+    assert is_exec_fallback_role("Founder and CEO")
+
+def test_exec_accepts_owner_and_director():
+    assert is_exec_fallback_role("Owner and Director")
+
+def test_exec_accepts_ceo_and_md():
+    assert is_exec_fallback_role("Chief Executive Officer and Managing Director")
+
+def test_exec_accepts_executive_director():
+    assert is_exec_fallback_role("Executive Director")
+
+# Must NOT be accepted as exec fallback
+def test_exec_rejects_national_sales_manager():
+    assert not is_exec_fallback_role("National Sales Manager")
+
+def test_exec_rejects_vp_risk():
+    assert not is_exec_fallback_role("VP Risk & Corporate Services")
+
+def test_exec_rejects_hr_director():
+    # HR Director is a primary role, not an exec fallback
+    assert not is_exec_fallback_role("HR Director")
+
+def test_exec_rejects_community_manager():
+    assert not is_exec_fallback_role("Community Relationships Manager")
+
+def test_exec_rejects_sentence():
+    assert not is_exec_fallback_role("Partnering to create progress through six pillars")
+
+def test_exec_rejects_our_people():
+    assert not is_exec_fallback_role("Our People")
 
 
 # ── runner ───────────────────────────────────────────────────────────────────

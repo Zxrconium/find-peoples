@@ -123,13 +123,14 @@ _TITLE_SENTENCE_RE = re.compile(
 # This is a positive-match requirement, not just absence-of-bad-things.
 _TITLE_REQUIRED_WORDS = re.compile(
     r"\b("
-    r"chief|officer|head\s+of|director|"
+    r"chief|officer|head\s+of|director|general\s+manager|group\s+(executive|manager)|"
     r"\bvp\b|vice\s+president|"
     r"manager|lead\b|partner\b|specialist|coordinator|recruiter|advisor|consultant|"
     r"\bhr\b|human\s+resources|"
     r"talent|chro|cpo|hrbp|"
     r"people\s+(operations|ops|partner|manager|lead|director|coordinator|"
-    r"business\s+partner|&\s*culture|and\s+culture|experience|analytics)|"
+    r"business\s+partner|engagement|services|development|"
+    r"&\s*culture|and\s+culture|experience|analytics)|"
     r"chief\s+people|head\s+of\s+people|director\s+of\s+people|"
     r"vp\s+(of\s+)?people|"
     r"l\s*&\s*d\b|learning\s+and\s+development|"
@@ -704,7 +705,6 @@ def is_hr_role(role_title: str) -> bool:
     """
     if not role_title:
         return False
-    # Shape + positive-word requirement
     if not is_valid_people_role_title(role_title):
         return False
     role_lower = role_title.lower()
@@ -712,6 +712,39 @@ def is_hr_role(role_title: str) -> bool:
         if kw in role_lower:
             return True
     return False
+
+
+# Approved executive titles used ONLY when zero People/HR roles are found.
+_EXEC_FALLBACK_PATTERNS = re.compile(
+    r"^("
+    r"ceo|"
+    r"chief\s+executive\s+officer(\s+and\s+managing\s+director)?|"
+    r"managing\s+director|"
+    r"founder(\s*/\s*ceo|\s+and\s+ceo|\s+&\s+ceo)?|"
+    r"owner\s+and\s+director|"
+    r"executive\s+director"
+    r")$",
+    re.I,
+)
+
+
+def is_exec_fallback_role(role_title: str) -> bool:
+    """
+    Return True only if the role title matches the approved executive fallback list.
+    Requires is_valid_people_role_title() to pass first (shape/seniority check).
+    """
+    if not role_title:
+        return False
+    # Shape check: must look like a job title (not a sentence)
+    stripped = role_title.strip()
+    if stripped.endswith(".") or stripped.endswith("?") or stripped.endswith("!"):
+        return False
+    if len(stripped.split()) > 12:
+        return False
+    # Must not be an obvious non-title
+    if _TITLE_SENTENCE_RE.search(stripped):
+        return False
+    return bool(_EXEC_FALLBACK_PATTERNS.match(stripped.strip()))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1057,18 +1090,32 @@ def crawl_and_extract(url_info, use_hunter=False, allow_guess=False):
     people = [p for p in people if _is_valid_record(p)]
     log.info(f"After validation gate: {len(people)}")
 
-    # Filter to HR roles
-    people = [p for p in people if is_hr_role(p.get("role_title", ""))]
-    log.info(f"After HR filter: {len(people)}")
+    # Primary filter: People/HR/Talent/Culture roles
+    hr_people = [p for p in people if is_hr_role(p.get("role_title", ""))]
+    log.info(f"After HR filter: {len(hr_people)}")
+
+    exec_fallback = False
+    if hr_people:
+        final_people = hr_people
+        for p in final_people:
+            p["result_type"] = "Primary People/HR"
+        log.info("Using primary People/HR results")
+    else:
+        # Fallback: approved executive titles only when no HR people found
+        exec_people = [p for p in people if is_exec_fallback_role(p.get("role_title", ""))]
+        log.info(f"No HR roles found. Executive fallback candidates: {len(exec_people)}")
+        final_people = exec_people
+        for p in final_people:
+            p["result_type"] = "Executive Fallback"
+        exec_fallback = bool(exec_people)
 
     # Enrich emails
-    people = enrich_emails(people, domain, site_emails, use_hunter, allow_guess)
+    final_people = enrich_emails(final_people, domain, site_emails, use_hunter, allow_guess)
 
     # Add LinkedIn search URL + company
-    for p in people:
+    for p in final_people:
         p["linkedin_url"] = linkedin_search_url(p["name"], company_name)
         p["company"] = company_name
-        # Ensure all fields present
         p.setdefault("email", None)
         p.setdefault("email_status", "not_found")
         p.setdefault("email_confidence", 0.0)
@@ -1078,7 +1125,8 @@ def crawl_and_extract(url_info, use_hunter=False, allow_guess=False):
     return {
         "success": True,
         "company": company_name,
-        "people": people,
+        "people": final_people,
+        "exec_fallback": exec_fallback,
         "pages_checked": pages_checked,
         "pages_skipped": pages_skipped,
         "crawled_at": datetime.now(timezone.utc).isoformat(),
@@ -1109,6 +1157,7 @@ def build_excel(result_data):
             "Name": p.get("name", ""),
             "Company": p.get("company", ""),
             "Role Title": p.get("role_title", ""),
+            "Result Type": p.get("result_type", "Primary People/HR"),
             "Source URL": "; ".join(p.get("source_urls", [])),
             "Source Quote": p.get("source_quote", ""),
             "Extraction Method": p.get("extraction_method", ""),
