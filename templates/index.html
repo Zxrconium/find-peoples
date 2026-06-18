@@ -213,9 +213,6 @@
     .badge-blue  { background: #dbeafe; color: var(--blue); }
     .badge-yellow{ background: #fef9c3; color: var(--yellow); }
 
-    .email-guess { font-style: italic; color: var(--muted); }
-    .email-none  { color: var(--gray); font-style: italic; }
-
     .link-linkedin {
       color: var(--primary);
       text-decoration: none;
@@ -285,17 +282,6 @@
         />
       </div>
 
-      <div class="checkbox-group">
-        <label class="checkbox-item">
-          <input type="checkbox" id="chk-hunter" />
-          Use Hunter.io email verification (requires API key)
-        </label>
-        <label class="checkbox-item">
-          <input type="checkbox" id="chk-guess" />
-          Allow guessed email patterns
-        </label>
-      </div>
-
       <button class="btn btn-primary" id="find-btn" onclick="startFind()">
         Find People
       </button>
@@ -325,8 +311,9 @@
               <th>Name</th>
               <th>Company</th>
               <th>Role Title</th>
-              <th>Email</th>
-              <th>LinkedIn Profile</th>
+              <th>Result Type</th>
+              <th>LinkedIn Search</th>
+              <th>Source URL</th>
             </tr>
           </thead>
           <tbody id="results-tbody"></tbody>
@@ -375,29 +362,6 @@
       });
     }
 
-    function renderEmail(person) {
-      const status = person.email_status;
-      const email = person.email;
-
-      if (!email || status === 'not_found') {
-        return '<span class="email-none">Not found</span>';
-      }
-
-      if (status === 'verified') {
-        return `${escHtml(email)}<span class="badge badge-green">verified</span>`;
-      }
-      if (status === 'found_on_site') {
-        return `${escHtml(email)}<span class="badge badge-blue">found on site</span>`;
-      }
-      if (status === 'hunter_confident') {
-        return `${escHtml(email)}<span class="badge badge-yellow">Hunter.io</span>`;
-      }
-      if (status === 'pattern_guess') {
-        return `<span class="email-guess">${escHtml(email)}</span>`;
-      }
-      return escHtml(email);
-    }
-
     function escHtml(str) {
       if (!str) return '';
       return str
@@ -412,14 +376,24 @@
       tbody.innerHTML = '';
       people.forEach(p => {
         const tr = document.createElement('tr');
+        const resultType = p.result_type || 'Primary People/HR';
+        const isExec = resultType.toLowerCase().includes('exec');
+        const badgeClass = isExec ? 'badge-yellow' : 'badge-blue';
+        const sourceUrl = p.source_url || '';
+        const sourceDisplay = sourceUrl ? sourceUrl.replace(/^https?:\/\//, '').substring(0, 40) + (sourceUrl.length > 50 ? '…' : '') : '—';
         tr.innerHTML = `
           <td>${escHtml(p.name)}</td>
           <td>${escHtml(p.company)}</td>
           <td>${escHtml(p.role_title)}</td>
-          <td>${renderEmail(p)}</td>
+          <td><span class="badge ${badgeClass}">${escHtml(resultType)}</span></td>
           <td>
             ${p.linkedin_url
               ? `<a class="link-linkedin" href="${escHtml(p.linkedin_url)}" target="_blank" rel="noopener noreferrer">Search LinkedIn</a>`
+              : '—'}
+          </td>
+          <td>
+            ${sourceUrl
+              ? `<a class="link-linkedin" href="${escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="${escHtml(sourceUrl)}">${escHtml(sourceDisplay)}</a>`
               : '—'}
           </td>
         `;
@@ -434,9 +408,6 @@
         return;
       }
 
-      const useHunter = document.getElementById('chk-hunter').checked;
-      const allowGuess = document.getElementById('chk-guess').checked;
-
       document.getElementById('find-btn').disabled = true;
       hideAllSections();
       showSection('status-section');
@@ -449,7 +420,6 @@
         [4000, 'Crawling team pages…'],
         [7000, 'Extracting people…'],
         [10000,'Running AI analysis…'],
-        [14000,'Enriching emails…'],
       ];
       const timers = stages.map(([delay, msg]) =>
         setTimeout(() => setStatus(msg), delay)
@@ -459,7 +429,7 @@
         const resp = await fetch('/find', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, use_hunter: useHunter, allow_guess: allowGuess }),
+          body: JSON.stringify({ url }),
         });
 
         timers.forEach(clearTimeout);
