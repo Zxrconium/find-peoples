@@ -63,6 +63,93 @@ GENERIC_EMAILS = {"info", "contact", "sales", "support", "hello", "careers", "jo
 EMAIL_PATTERN_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 NAME_PATTERN_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b")
 
+# Words whose presence in a name candidate proves it is NOT a human name
+_NAME_REJECT_WORDS = {
+    "our", "their", "the", "a", "an", "and", "or", "in", "of", "for",
+    "with", "at", "by", "from", "to", "is", "are", "was", "has", "have",
+    "will", "can", "may", "about", "all", "some", "more", "every", "each",
+    "this", "that", "these", "those", "what", "when", "where", "how", "why",
+    "who", "which", "we", "us", "you", "your", "my", "me",
+    # domain-specific non-name nouns
+    "people", "community", "communities", "stories", "team", "teams",
+    "culture", "careers", "company", "organization", "department",
+    "services", "solutions", "technologies", "business", "businesses",
+    "customers", "clients", "partners", "employees", "staff",
+    "australia", "australian", "global", "world", "international", "local",
+    "trusted", "pharmacy", "hospital", "group", "brand", "network",
+}
+
+_NAME_MARKETING_RE = re.compile(
+    r"\b(see\s+some|amazing|discover|explore|join\s+us|click|read\s+more|"
+    r"learn\s+more|view\s+all|find\s+out|welcome|proud|passionate|committed|"
+    r"around\s+australia|around\s+the)\b",
+    re.I,
+)
+
+# A role title must not look like a marketing sentence or body copy
+_TITLE_SENTENCE_RE = re.compile(
+    r"\b(see\s+some|some\s+of\s+the|stories?\s+of|communities?\s+around|"
+    r"around\s+(australia|the\s+world)|our\s+people\s+and|and\s+communities|"
+    r"amazing\s+stories|trusted\s+pharmacy|discover|explore|learn\s+more|"
+    r"read\s+more|click\s+here|find\s+out)\b",
+    re.I,
+)
+
+CONFIDENCE_THRESHOLD = 0.40  # below this a person is dropped
+
+
+def is_valid_person_name(name: str) -> bool:
+    """Return True only if name looks like a real human full name."""
+    if not name:
+        return False
+    # Commas disqualify immediately (e.g. "Our People, Our Community")
+    if "," in name:
+        return False
+    tokens = name.split()
+    # Must be 2–4 words
+    if len(tokens) < 2 or len(tokens) > 4:
+        return False
+    # Each token must be alphabetic (allow hyphens/apostrophes)
+    for token in tokens:
+        if not re.match(r"^[A-Za-z'\-]+$", token):
+            return False
+        if len(token) < 2:
+            return False
+    # Each token must start with uppercase
+    for token in tokens:
+        clean = re.sub(r"['\-]", "", token)
+        if not clean or not clean[0].isupper():
+            return False
+    # No token may be a known non-name word
+    for token in tokens:
+        if token.lower() in _NAME_REJECT_WORDS:
+            return False
+    # No marketing phrasing in the full string
+    if _NAME_MARKETING_RE.search(name):
+        return False
+    return True
+
+
+def is_valid_job_title(title: str) -> bool:
+    """Return True only if title looks like a real job title (not body copy)."""
+    if not title:
+        return False
+    title = title.strip()
+    # Ends with a sentence-ending period → body copy
+    if title.endswith(".") or title.endswith("?") or title.endswith("!"):
+        return False
+    words = title.split()
+    # Longer than 10 words → almost certainly not a job title
+    if len(words) > 10:
+        return False
+    # Contains sentence-like phrases
+    if _TITLE_SENTENCE_RE.search(title):
+        return False
+    # Contains "our people" as a phrase (marketing, not a title)
+    if re.search(r"\bour\s+people\b", title, re.I):
+        return False
+    return True
+
 COMPANY_STRIP_SUFFIXES = re.compile(
     r",?\s*(Inc\.?|LLC\.?|Ltd\.?|Limited|GmbH|Corp\.?|Corporation|Co\.|Company|S\.A\.|AG|BV|NV|PLC|LLP|LP)\s*$",
     re.I,
@@ -391,9 +478,8 @@ def layer_a_structured(soup, page_url):
                 continue
             name_candidate = texts[0]
             role_candidate = texts[1] if len(texts) > 1 else ""
-            if (NAME_PATTERN_RE.match(name_candidate) and
-                    len(name_candidate.split()) >= 2 and
-                    len(name_candidate) < 60 and
+            if (is_valid_person_name(name_candidate) and
+                    is_valid_job_title(role_candidate) and
                     any(kw in role_candidate.lower() for kw in ["hr", "people", "talent", "recruit",
                                                                   "human resources", "culture", "dei",
                                                                   "diversity", "inclusion", "workforce",
@@ -411,14 +497,15 @@ def layer_a_structured(soup, page_url):
     # h3/h4 followed by p with title keywords
     for heading in soup.find_all(["h3", "h4"]):
         name_text = heading.get_text(strip=True)
-        if not NAME_PATTERN_RE.match(name_text) or len(name_text.split()) < 2:
+        if not is_valid_person_name(name_text):
             continue
         next_el = heading.find_next_sibling()
         if next_el and next_el.name in ("p", "span", "div"):
             role_text = next_el.get_text(strip=True)
-            if any(kw in role_text.lower() for kw in ["hr", "people", "talent", "recruit",
-                                                        "human resources", "culture", "dei",
-                                                        "diversity", "chro", "cpo", "learning"]):
+            if (is_valid_job_title(role_text) and
+                    any(kw in role_text.lower() for kw in ["hr", "people", "talent", "recruit",
+                                                            "human resources", "culture", "dei",
+                                                            "diversity", "chro", "cpo", "learning"])):
                 people.append({
                     "name": name_text,
                     "role_title": role_text,
@@ -450,11 +537,7 @@ def layer_b_heuristic(soup, page_url):
         window = text[start:end]
         for nm in NAME_PATTERN_RE.finditer(window):
             candidate = nm.group(0)
-            if len(candidate.split()) < 2:
-                continue
-            # Reject obvious non-names
-            if any(bad in candidate.lower() for bad in ["our team", "the company", "all rights",
-                                                          "privacy policy", "cookie", "terms of"]):
+            if not is_valid_person_name(candidate):
                 continue
             role = m.group(0).strip()
             snippet = window.strip().replace("\n", " ")[:200]
@@ -503,11 +586,19 @@ def layer_c_claude(page_text, page_url):
             if not isinstance(item, dict):
                 continue
             conf = float(item.get("confidence", 0))
-            if conf < 0.4:
+            if conf < CONFIDENCE_THRESHOLD:
+                continue
+            name = item.get("name", "").strip()
+            role = item.get("role_title", "").strip()
+            if not is_valid_person_name(name):
+                log.info(f"Claude: rejecting invalid name {name!r}")
+                continue
+            if not is_valid_job_title(role):
+                log.info(f"Claude: rejecting invalid title {role!r}")
                 continue
             results.append({
-                "name": item.get("name", "").strip(),
-                "role_title": item.get("role_title", "").strip(),
+                "name": name,
+                "role_title": role,
                 "source_quote": item.get("source_quote", "").strip(),
                 "extraction_method": "claude",
                 "source_urls": [page_url],
@@ -529,18 +620,44 @@ def layer_c_claude(page_text, page_url):
 
 FALSE_POSITIVE_PHRASES = [
     "people person", "serves people", "serving people", "help people",
-    "supports people", "people-centered",
+    "supports people", "people-centered", "our people", "amazing people",
+    "great people", "our team of people",
 ]
+
+# HR_KEYWORDS that are substrings of many non-HR phrases — require them to be
+# part of a proper title structure (not free-floating in body copy).
+_PEOPLE_WORD_ONLY = re.compile(
+    r"\b(chief\s+people|head\s+of\s+people|director\s+of\s+people|"
+    r"vp\s+(of\s+)?people|vice\s+president\s+(of\s+)?people|"
+    r"people\s+(operations|ops|partner|manager|lead|director|"
+    r"business\s+partner|&\s*culture|and\s+culture|experience|"
+    r"analytics|programs?))\b",
+    re.I,
+)
 
 
 def is_hr_role(role_title: str) -> bool:
+    """Return True only if role_title is both a valid job title AND an HR/People role."""
     if not role_title:
         return False
+    # First gate: must look like a real job title
+    if not is_valid_job_title(role_title):
+        return False
     role_lower = role_title.lower()
-    # Reject false positives
+    # Reject false positive phrases
     for fp in FALSE_POSITIVE_PHRASES:
         if fp in role_lower:
             return False
+    # The standalone word "people" only counts when it forms a proper HR title
+    if "people" in role_lower and not _PEOPLE_WORD_ONLY.search(role_title):
+        # Remove "people" from the candidate and continue checking other keywords
+        role_lower_no_people = role_lower.replace("people", "")
+        for kw in HR_KEYWORDS:
+            if kw == "people":
+                continue
+            if kw in role_lower_no_people:
+                return True
+        return False
     for kw in HR_KEYWORDS:
         if kw in role_lower:
             return True
@@ -861,6 +978,22 @@ def crawl_and_extract(url_info, use_hunter=False, allow_guess=False):
     # Deduplicate
     people = deduplicate(all_candidates)
     log.info(f"After dedup: {len(people)}")
+
+    # Final validation gate: name + title must look like real person data
+    def _is_valid_record(p):
+        if not is_valid_person_name(p.get("name", "")):
+            log.info(f"REJECT invalid name: {p.get('name')!r}")
+            return False
+        if not is_valid_job_title(p.get("role_title", "")):
+            log.info(f"REJECT invalid title: {p.get('role_title')!r}")
+            return False
+        if p.get("confidence", 0) < CONFIDENCE_THRESHOLD:
+            log.info(f"REJECT low confidence ({p.get('confidence')}) for {p.get('name')!r}")
+            return False
+        return True
+
+    people = [p for p in people if _is_valid_record(p)]
+    log.info(f"After validation gate: {len(people)}")
 
     # Filter to HR roles
     people = [p for p in people if is_hr_role(p.get("role_title", ""))]
